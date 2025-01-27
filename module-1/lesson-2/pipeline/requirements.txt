@@ -1,0 +1,5 @@
+psycopg  # For psycopg v3.x
+psycopg-binary
+psycopg2
+psycopg2-binary
+pandas

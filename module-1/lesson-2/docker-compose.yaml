@@ -1,0 +1,40 @@
+version: "3.8"
+
+volumes:
+  postgres_data:
+    name: postgres_data
+  pgadmin_data:
+    name: pgadmin_data
+
+services:
+  db:
+    container_name: postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: 'postgres'
+      POSTGRES_PASSWORD: 'postgres'
+      POSTGRES_DB: 'ny_taxi'
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data  # Bind mount for PostgreSQL data
+
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "pgadmin@pgadmin.com"
+      PGADMIN_DEFAULT_PASSWORD: "pgadmin"
+    ports:
+      - "8080:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin  # Bind mount for pgAdmin data
+
+  pipeline_app:
+    container_name: pipeline_app
+    build: ./pipeline  # Ensure this directory has Dockerfile + ingest.py
+    volumes:
+      - ./pipeline:/app
+    depends_on:
+      - db  # Start after PostgreSQL
+    command: python ingest.py  # Script with hardcoded DB details
