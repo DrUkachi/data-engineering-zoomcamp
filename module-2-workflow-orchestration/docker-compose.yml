@@ -1,0 +1,103 @@
+version: "3.8"
+
+volumes:
+  kestra-db-data:
+    driver: local
+  user-db-data:
+    driver: local
+  kestra-storage:
+    driver: local
+  pgadmin-data:
+    driver: local
+
+services:
+  # Service 1: Kestra's PostgreSQL database
+  kestra-db:
+    image: postgres
+    container_name: kestra-db
+    volumes:
+      - kestra-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: kestra
+      POSTGRES_USER: kestra
+      POSTGRES_PASSWORD: k3str4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Service 2: Kestra
+  kestra:
+    image: kestra/kestra:latest
+    container_name: kestra
+    pull_policy: always
+    user: "root"
+    command: server standalone
+    volumes:
+      - kestra-storage:/app/storage
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/kestra-wd:/tmp/kestra-wd
+    environment:
+      KESTRA_CONFIGURATION: |
+        datasources:
+          postgres:
+            url: jdbc:postgresql://kestra-db:5432/kestra
+            driverClassName: org.postgresql.Driver
+            username: kestra
+            password: k3str4
+        kestra:
+          server:
+            basicAuth:
+              enabled: false
+              username: "admin@kestra.io"
+              password: kestra
+          repository:
+            type: postgres
+          storage:
+            type: local
+            local:
+              basePath: "/app/storage"
+          queue:
+            type: postgres
+          tasks:
+            tmpDir:
+              path: /tmp/kestra-wd/tmp
+          url: http://localhost:8080/
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    depends_on:
+      kestra-db:
+        condition: service_healthy
+
+  # Service 3: User's PostgreSQL database
+  user-db:
+    image: postgres
+    container_name: user-db
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: postgres-zoomcamp
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: userpass
+    ports:
+      - "5433:5432"  # Accessible on host port 5433
+    depends_on:
+      kestra:
+        condition: service_started
+
+  # Service 4: PGAdmin for the user's database
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8085:80"
+    depends_on:
+      user-db:
+        condition: service_started
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
